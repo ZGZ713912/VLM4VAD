@@ -1,0 +1,16 @@
+video_dir: ../sample_videos
+anomaly_text: 打架
+model_checkpoint: ../VadCLIP/model/model_xd.pth
+device: auto
+threshold: 0.5
+frame_stride: 16
+visual_length: 256
+visual_width: 512
+embed_dim: 512
+visual_head: 1
+visual_layers: 1
+attn_window: 64
+prompt_prefix: 10
+prompt_postfix: 10
+recursive: true
+output: outputs/results.json
