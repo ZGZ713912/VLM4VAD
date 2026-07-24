@@ -12,20 +12,29 @@
 
 ```
 VLM4VAD/
-├── data/              # 数据集存放
-├── src/               # 源代码
-│   ├── preprocessing/ # 数据预处理（抽帧、切片）
-│   ├── features/      # 特征提取（VLM 调用）
-│   ├── detection/     # 异常检测算法
-│   ├── temporal/      # 时序优化模块
-│   └── visualization/ # 可视化展示
-├── configs/           # 配置文件
-├── notebooks/         # Jupyter 实验笔记
-├── tests/             # 单元测试
-├── scripts/           # 工具脚本
-├── docs/              # 文档
-├── PLAN.md            # 项目计划
-└── AGENTS.md          # AI 助手规范
+├── src/                 # 源代码
+│   ├── preprocessing/   # 数据预处理（抽帧、切片）
+│   ├── features/        # 特征提取（VLM 调用）
+│   ├── detection/       # 异常检测算法
+│   ├── prompts/         # 文本 prompt
+│   ├── clip/            # CLIP 实现
+│   └── utils/           # 通用工具
+├── configs/             # 配置文件
+├── data/
+│   ├── videos/          # 本地测试视频（不提交）
+│   └── datasets/        # 数据集（不提交）
+├── checkpoints/         # 模型权重（不提交）
+├── scripts/             # 工具脚本
+├── docs/
+│   ├── references/      # 参考材料 / 申报书
+│   └── guides/          # 开发与使用说明
+├── experiments/         # 实验记录
+├── outputs/             # 推理结果
+├── tests/               # 单元测试
+├── notebooks/           # Jupyter 实验笔记
+├── .devcontainer/       # 开发容器
+├── PLAN.md              # 项目计划
+└── AGENTS.md            # AI 助手规范
 ```
 
 ## 代码规范
@@ -49,9 +58,9 @@ mypy src/
 # 运行测试
 pytest tests/
 
-# 训练/推理
-python src/train.py --config configs/default.yaml
-python src/detect.py --video path/to/video.mp4
+# 推理
+python src/detect.py --config configs/inference.yaml
+python src/detect.py --video-dir data/videos --anomaly-text "打架" --checkpoint checkpoints/model_xd.pth
 ```
 
 ## 文档获取指引
@@ -69,6 +78,7 @@ python src/detect.py --video path/to/video.mp4
 
 ## 注意
 
-- 不将数据文件提交到仓库（data/ 在 .gitignore 中）
-- 模型权重文件不提交，记录下载链接或路径
-- 实验配置与结果记录在 experiments/ 下，方便复现
+- 不将数据文件提交到仓库（`data/videos/`、`data/datasets/` 已在 `.gitignore` 中）
+- 模型权重放在 `checkpoints/`，不提交；记录下载链接或本地路径
+- 实验配置与结果记录在 `experiments/`，推理结果写入 `outputs/`
+- 参考材料放在 `docs/references/`，开发说明放在 `docs/guides/`

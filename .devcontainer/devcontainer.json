@@ -42,5 +42,5 @@
     }
   },
   "postCreateCommand": "bash .devcontainer/postCreate.sh",
-  "postStartCommand": "mkdir -p outputs"
+  "postStartCommand": "mkdir -p outputs data/videos data/datasets checkpoints experiments"
 }

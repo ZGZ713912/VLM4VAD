@@ -10,5 +10,8 @@ __pycache__
 .ruff_cache
 outputs
 data
+checkpoints
+experiments
+notebooks
 *.pt
 *.pth

@@ -80,6 +80,24 @@ env/
 
 # Model and result artifacts
 outputs/
+checkpoints/*
+!checkpoints/.gitkeep
 *.pth
 *.pt
 *.onnx
+
+# Datasets and local videos (keep directory placeholders)
+data/videos/*
+!data/videos/.gitkeep
+data/datasets/*
+!data/datasets/.gitkeep
+
+# Experiments and notebooks local artifacts
+experiments/*
+!experiments/.gitkeep
+notebooks/*
+!notebooks/.gitkeep
+
+# Desktop / editor noise
+.directory
+.DS_Store

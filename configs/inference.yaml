@@ -1,6 +1,6 @@
-video_dir: ../sample_videos
+video_dir: data/videos
 anomaly_text: 打架
-model_checkpoint: ../VadCLIP/model/model_xd.pth
+model_checkpoint: checkpoints/model_xd.pth
 device: auto
 threshold: 0.5
 frame_stride: 16

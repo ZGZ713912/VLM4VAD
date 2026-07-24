@@ -27,7 +27,7 @@ python -m pip install \
 python -m pip install -r requirements.txt
 python -m pip install ipykernel
 
-mkdir -p outputs
+mkdir -p outputs data/videos data/datasets checkpoints experiments
 
 if ! grep -q 'export PATH="$HOME/.local/bin:$PATH"' /home/vscode/.zshrc; then
   printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> /home/vscode/.zshrc
