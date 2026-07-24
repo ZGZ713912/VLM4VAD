@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+
+# Lightweight project health check before running detection.
+# Usage:
+#   ./scripts/check-vlm4vad
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/_common.sh
+source "${SCRIPT_DIR}/_common.sh"
+
+ROOT="$(vlm4vad_repo_root)"
+cd "${ROOT}"
+vlm4vad_ensure_dirs "${ROOT}"
+
+vlm4vad_info "Checking VLM4VAD layout and defaults"
+
+STATUS=0
+
+if ! command -v python >/dev/null 2>&1; then
+  vlm4vad_error "python not found"
+  exit 1
+fi
+
+CONFIG="${ROOT}/configs/inference.yaml"
+if [[ ! -f "${CONFIG}" ]]; then
+  vlm4vad_error "Missing config: configs/inference.yaml"
+  exit 1
+fi
+
+set +e
+python - <<'PY'
+from pathlib import Path
+import sys
+import yaml
+
+root = Path(".").resolve()
+config = yaml.safe_load((root / "configs/inference.yaml").read_text(encoding="utf-8")) or {}
+
+video_dir = root / config.get("video_dir", "data/videos")
+checkpoint = root / config.get("model_checkpoint", "checkpoints/model_xd.pth")
+output = root / config.get("output", "outputs/results.json")
+anomaly_text = config.get("anomaly_text", "")
+
+suffixes = {".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv"}
+count = 0
+if video_dir.is_dir():
+    count = sum(1 for p in video_dir.rglob("*") if p.is_file() and p.suffix.lower() in suffixes)
+
+print(f"anomaly_text={anomaly_text}")
+print(f"video_dir={video_dir}")
+print(f"checkpoint={checkpoint}")
+print(f"output={output}")
+print(f"video_dir_exists={video_dir.is_dir()}")
+print(f"checkpoint_exists={checkpoint.is_file()}")
+print(f"video_count={count}")
+
+ok = True
+if not video_dir.is_dir():
+    print("WARN: video directory missing", file=sys.stderr)
+    ok = False
+elif count == 0:
+    print("WARN: no videos found under video_dir", file=sys.stderr)
+    ok = False
+
+if not checkpoint.is_file():
+    print("WARN: checkpoint not found", file=sys.stderr)
+    ok = False
+
+if not anomaly_text:
+    print("WARN: anomaly_text is empty in config", file=sys.stderr)
+    ok = False
+
+raise SystemExit(0 if ok else 2)
+PY
+layout_status=$?
+set -e
+if [[ "${layout_status}" -ne 0 ]]; then
+  STATUS=2
+fi
+
+vlm4vad_info "Checking Python packages"
+set +e
+"${SCRIPT_DIR}/setup-vlm4vad" --check-only
+pkg_status=$?
+set -e
+if [[ "${pkg_status}" -ne 0 ]]; then
+  STATUS=1
+fi
+
+if [[ "${STATUS}" -eq 0 ]]; then
+  vlm4vad_info "All checks passed. Run: ./scripts/detect-vlm4vad"
+else
+  vlm4vad_info "Check finished with warnings/errors (exit=${STATUS})"
+fi
+exit "${STATUS}"

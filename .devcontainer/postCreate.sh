@@ -27,14 +27,8 @@ python -m pip install \
 python -m pip install -r requirements.txt
 python -m pip install ipykernel
 
-mkdir -p outputs data/videos data/datasets checkpoints experiments
+mkdir -p outputs data/videos data/datasets checkpoints experiments scripts
 
-if ! grep -q 'export PATH="$HOME/.local/bin:$PATH"' /home/vscode/.zshrc; then
-  printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> /home/vscode/.zshrc
-fi
-
-if [ -f /home/vscode/.bashrc ] && ! grep -q 'export PATH="$HOME/.local/bin:$PATH"' /home/vscode/.bashrc; then
-  printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> /home/vscode/.bashrc
-fi
+bash scripts/install-path.sh
 
 python -c "import cv2, torch, torchvision, yaml" >/dev/null

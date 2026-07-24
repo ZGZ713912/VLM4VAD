@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+
+# Prepare local directories and verify the inference environment.
+# Usage:
+#   ./scripts/setup-vlm4vad
+#   ./scripts/setup-vlm4vad --install
+#   ./scripts/setup-vlm4vad --check-only
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/_common.sh
+source "${SCRIPT_DIR}/_common.sh"
+
+ROOT="$(vlm4vad_repo_root)"
+CHECK_ONLY=0
+DO_INSTALL=0
+
+for arg in "$@"; do
+  case "${arg}" in
+    --check-only)
+      CHECK_ONLY=1
+      ;;
+    --install)
+      DO_INSTALL=1
+      ;;
+    -h|--help)
+      cat <<'EOF'
+Usage: setup-vlm4vad [--install] [--check-only]
+
+Create project directories and verify Python dependencies for VLM4VAD.
+
+Options:
+  --install      pip install -r requirements.txt before checking
+  --check-only   Only verify the environment, do not create directories
+  -h, --help     Show this help
+EOF
+      exit 0
+      ;;
+    *)
+      vlm4vad_error "Unknown argument: ${arg}"
+      exit 1
+      ;;
+  esac
+done
+
+cd "${ROOT}"
+
+if [[ "${CHECK_ONLY}" -eq 0 ]]; then
+  vlm4vad_info "Creating project directories under ${ROOT}"
+  vlm4vad_ensure_dirs "${ROOT}"
+  chmod +x \
+    "${ROOT}/scripts/setup-vlm4vad" \
+    "${ROOT}/scripts/detect-vlm4vad" \
+    "${ROOT}/scripts/check-vlm4vad" \
+    2>/dev/null || true
+fi
+
+vlm4vad_require_cmd python
+
+if [[ "${DO_INSTALL}" -eq 1 ]]; then
+  vlm4vad_info "Installing requirements.txt"
+  python -m pip install -r "${ROOT}/requirements.txt"
+fi
+
+vlm4vad_info "Checking Python packages"
+if ! python - <<'PY'
+import importlib
+import sys
+
+required = [
+    "cv2",
+    "numpy",
+    "PIL",
+    "torch",
+    "torchvision",
+    "yaml",
+    "tqdm",
+    "ftfy",
+    "regex",
+]
+
+missing = []
+for name in required:
+    try:
+        importlib.import_module(name)
+    except Exception:
+        missing.append(name)
+
+if missing:
+    print("Missing packages: " + ", ".join(missing), file=sys.stderr)
+    print("Install with: ./scripts/setup-vlm4vad --install", file=sys.stderr)
+    raise SystemExit(1)
+
+import torch
+print(f"torch={torch.__version__} cuda={torch.cuda.is_available()}")
+PY
+then
+  exit 1
+fi
+
+vlm4vad_info "Environment is ready"
+vlm4vad_info "Put videos in: ${ROOT}/data/videos"
+vlm4vad_info "Put checkpoint in: ${ROOT}/checkpoints/model_xd.pth"

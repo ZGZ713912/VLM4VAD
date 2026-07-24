@@ -7,7 +7,9 @@
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "remoteUser": "vscode",
   "remoteEnv": {
-    "PATH": "/home/vscode/.local/bin:${containerEnv:PATH}"
+    "PATH": "${containerWorkspaceFolder}/scripts:/home/vscode/.local/bin:${containerEnv:PATH}",
+    "PYTHONPATH": "${containerWorkspaceFolder}/src",
+    "VLM4VAD_PATH": "${containerWorkspaceFolder}"
   },
   "runArgs": [
     "--ipc=host",
@@ -42,5 +44,5 @@
     }
   },
   "postCreateCommand": "bash .devcontainer/postCreate.sh",
-  "postStartCommand": "mkdir -p outputs data/videos data/datasets checkpoints experiments"
+  "postStartCommand": "bash scripts/install-path.sh && mkdir -p outputs data/videos data/datasets checkpoints experiments"
 }

@@ -1,0 +1,273 @@
+#!/usr/bin/env bash
+
+# One-click video anomaly detection: videos -> scores/results.json
+# Usage:
+#   ./scripts/detect-vlm4vad
+#   ./scripts/detect-vlm4vad --config configs/inference.yaml
+#   ./scripts/detect-vlm4vad --video-dir data/videos --anomaly-text "打架" --checkpoint checkpoints/model_xd.pth
+#   ./scripts/detect-vlm4vad --video path/to/video.mp4 --anomaly-text "打架"
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/_common.sh
+source "${SCRIPT_DIR}/_common.sh"
+
+ROOT="$(vlm4vad_repo_root)"
+cd "${ROOT}"
+
+vlm4vad_ensure_dirs "${ROOT}"
+vlm4vad_require_cmd python
+
+CONFIG="configs/inference.yaml"
+VIDEO_DIR=""
+VIDEO_PATH=""
+ANOMALY_TEXT=""
+CHECKPOINT=""
+OUTPUT=""
+DEVICE=""
+THRESHOLD=""
+FRAME_STRIDE=""
+RECURSIVE=""
+EXTRA_ARGS=()
+
+usage() {
+  cat <<'EOF'
+Usage: detect-vlm4vad [options]
+
+One-click pipeline:
+  data/videos + checkpoint -> outputs/results.json
+
+Options:
+  --config PATH           Config file (default: configs/inference.yaml)
+  --video-dir PATH        Directory of videos (default from config: data/videos)
+  --video PATH            Single video file (overrides --video-dir)
+  --anomaly-text TEXT     Anomaly description, e.g. 打架
+  --checkpoint PATH       Model weights path
+  --output PATH           Result JSON path
+  --device DEVICE         auto | cpu | cuda
+  --threshold FLOAT       Abnormal score threshold
+  --frame-stride INT      Frame sampling stride
+  --recursive             Recursively scan video directory
+  --no-recursive          Do not recurse into subdirectories
+  -h, --help              Show this help
+
+Examples:
+  ./scripts/detect-vlm4vad
+  ./scripts/detect-vlm4vad --anomaly-text "爆炸"
+  ./scripts/detect-vlm4vad --video data/videos/demo.mp4 --anomaly-text "打架"
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --config)
+      CONFIG="${2:-}"
+      shift 2
+      ;;
+    --video-dir)
+      VIDEO_DIR="${2:-}"
+      shift 2
+      ;;
+    --video)
+      VIDEO_PATH="${2:-}"
+      shift 2
+      ;;
+    --anomaly-text)
+      ANOMALY_TEXT="${2:-}"
+      shift 2
+      ;;
+    --checkpoint)
+      CHECKPOINT="${2:-}"
+      shift 2
+      ;;
+    --output)
+      OUTPUT="${2:-}"
+      shift 2
+      ;;
+    --device)
+      DEVICE="${2:-}"
+      shift 2
+      ;;
+    --threshold)
+      THRESHOLD="${2:-}"
+      shift 2
+      ;;
+    --frame-stride)
+      FRAME_STRIDE="${2:-}"
+      shift 2
+      ;;
+    --recursive)
+      RECURSIVE="1"
+      shift
+      ;;
+    --no-recursive)
+      RECURSIVE="0"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      EXTRA_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
+  vlm4vad_error "Unknown arguments: ${EXTRA_ARGS[*]}"
+  usage
+  exit 1
+fi
+
+resolve_path() {
+  local value="$1"
+  if [[ -z "${value}" ]]; then
+    echo ""
+    return
+  fi
+  if [[ "${value}" = /* ]]; then
+    echo "${value}"
+  else
+    echo "${ROOT}/${value}"
+  fi
+}
+
+CONFIG_PATH="$(resolve_path "${CONFIG}")"
+if [[ ! -f "${CONFIG_PATH}" ]]; then
+  vlm4vad_error "Config not found: ${CONFIG_PATH}"
+  exit 1
+fi
+
+# Read defaults from config for preflight checks.
+eval "$(
+  CONFIG_PATH="${CONFIG_PATH}" python - <<'PY'
+from pathlib import Path
+import os
+import shlex
+import yaml
+
+config_path = Path(os.environ["CONFIG_PATH"])
+data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+
+def emit(key, value):
+    if value is None:
+        value = ""
+    print(f"{key}={shlex.quote(str(value))}")
+
+emit("CFG_VIDEO_DIR", data.get("video_dir", "data/videos"))
+emit("CFG_ANOMALY_TEXT", data.get("anomaly_text", ""))
+emit("CFG_CHECKPOINT", data.get("model_checkpoint", "checkpoints/model_xd.pth"))
+emit("CFG_OUTPUT", data.get("output", "outputs/results.json"))
+emit("CFG_DEVICE", data.get("device", "auto"))
+emit("CFG_THRESHOLD", data.get("threshold", 0.5))
+emit("CFG_FRAME_STRIDE", data.get("frame_stride", 16))
+emit("CFG_RECURSIVE", "1" if data.get("recursive", True) else "0")
+PY
+)"
+
+VIDEO_DIR="${VIDEO_DIR:-${CFG_VIDEO_DIR}}"
+ANOMALY_TEXT="${ANOMALY_TEXT:-${CFG_ANOMALY_TEXT}}"
+CHECKPOINT="${CHECKPOINT:-${CFG_CHECKPOINT}}"
+OUTPUT="${OUTPUT:-${CFG_OUTPUT}}"
+DEVICE="${DEVICE:-${CFG_DEVICE}}"
+THRESHOLD="${THRESHOLD:-${CFG_THRESHOLD}}"
+FRAME_STRIDE="${FRAME_STRIDE:-${CFG_FRAME_STRIDE}}"
+RECURSIVE="${RECURSIVE:-${CFG_RECURSIVE}}"
+
+VIDEO_DIR_ABS="$(resolve_path "${VIDEO_DIR}")"
+CHECKPOINT_ABS="$(resolve_path "${CHECKPOINT}")"
+OUTPUT_ABS="$(resolve_path "${OUTPUT}")"
+VIDEO_PATH_ABS="$(resolve_path "${VIDEO_PATH}")"
+
+if [[ -z "${ANOMALY_TEXT}" ]]; then
+  vlm4vad_error "anomaly text is empty. Pass --anomaly-text or set it in ${CONFIG}"
+  exit 1
+fi
+
+if [[ ! -f "${CHECKPOINT_ABS}" ]]; then
+  vlm4vad_error "Checkpoint not found: ${CHECKPOINT_ABS}"
+  vlm4vad_info "Put model weights at checkpoints/model_xd.pth or pass --checkpoint"
+  exit 1
+fi
+
+if [[ -n "${VIDEO_PATH}" ]]; then
+  if [[ ! -f "${VIDEO_PATH_ABS}" ]]; then
+    vlm4vad_error "Video not found: ${VIDEO_PATH_ABS}"
+    exit 1
+  fi
+  # Create a temporary single-file directory for the existing folder API.
+  WORK_DIR="$(mktemp -d "${ROOT}/outputs/.single_video.XXXXXX")"
+  cleanup() {
+    rm -rf "${WORK_DIR}"
+  }
+  trap cleanup EXIT
+  ln -s "${VIDEO_PATH_ABS}" "${WORK_DIR}/$(basename "${VIDEO_PATH_ABS}")"
+  VIDEO_DIR_ABS="${WORK_DIR}"
+  RECURSIVE="0"
+else
+  if [[ ! -d "${VIDEO_DIR_ABS}" ]]; then
+    vlm4vad_error "Video directory not found: ${VIDEO_DIR_ABS}"
+    vlm4vad_info "Put videos under data/videos/ or pass --video-dir"
+    exit 1
+  fi
+
+  video_count="$(
+    VIDEO_DIR_ABS="${VIDEO_DIR_ABS}" RECURSIVE="${RECURSIVE}" python - <<'PY'
+from pathlib import Path
+import os
+
+root = Path(os.environ["VIDEO_DIR_ABS"])
+recursive = os.environ["RECURSIVE"] == "1"
+suffixes = {".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv"}
+pattern = "**/*" if recursive else "*"
+files = [p for p in root.glob(pattern) if p.is_file() and p.suffix.lower() in suffixes]
+print(len(files))
+PY
+  )"
+
+  if [[ "${video_count}" -eq 0 ]]; then
+    vlm4vad_error "No video files found in: ${VIDEO_DIR_ABS}"
+    vlm4vad_info "Supported: mp4/avi/mov/mkv/webm/..."
+    exit 1
+  fi
+fi
+
+mkdir -p "$(dirname "${OUTPUT_ABS}")"
+
+vlm4vad_info "Repo: ${ROOT}"
+vlm4vad_info "Config: ${CONFIG_PATH}"
+if [[ -n "${VIDEO_PATH}" ]]; then
+  vlm4vad_info "Video: ${VIDEO_PATH_ABS}"
+else
+  vlm4vad_info "Video dir: ${VIDEO_DIR_ABS} (${video_count} files)"
+fi
+vlm4vad_info "Checkpoint: ${CHECKPOINT_ABS}"
+vlm4vad_info "Anomaly text: ${ANOMALY_TEXT}"
+vlm4vad_info "Output: ${OUTPUT_ABS}"
+vlm4vad_info "Running detection..."
+
+CMD=(
+  python src/detect.py
+  --config "${CONFIG_PATH}"
+  --video-dir "${VIDEO_DIR_ABS}"
+  --anomaly-text "${ANOMALY_TEXT}"
+  --checkpoint "${CHECKPOINT_ABS}"
+  --output "${OUTPUT_ABS}"
+  --device "${DEVICE}"
+  --threshold "${THRESHOLD}"
+  --frame-stride "${FRAME_STRIDE}"
+)
+
+if [[ "${RECURSIVE}" == "1" ]]; then
+  CMD+=(--recursive)
+else
+  CMD+=(--no-recursive)
+fi
+
+PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}" "${CMD[@]}"
+
+vlm4vad_info "Done"
+vlm4vad_info "Results: ${OUTPUT_ABS}"
