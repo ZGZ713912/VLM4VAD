@@ -28,6 +28,11 @@ OUTPUT=""
 DEVICE=""
 THRESHOLD=""
 FRAME_STRIDE=""
+MAX_FRAMES=""
+WINDOW_STRIDE=""
+WINDOW_TOPK_RATIO=""
+VIDEO_TOPK=""
+SMOOTHING_KERNEL=""
 RECURSIVE=""
 EXTRA_ARGS=()
 
@@ -48,6 +53,11 @@ Options:
   --device DEVICE         auto | cpu | cuda
   --threshold FLOAT       Abnormal score threshold
   --frame-stride INT      Frame sampling stride
+  --max-frames INT        Optional cap on sampled frames per video
+  --window-stride INT     Sliding window stride in sampled frames
+  --window-topk-ratio F   Ratio of high-score frames used per window
+  --video-topk INT        Mean of top-N windows for video score
+  --smoothing-kernel INT  Odd moving-average kernel for frame scores
   --recursive             Recursively scan video directory
   --no-recursive          Do not recurse into subdirectories
   -h, --help              Show this help
@@ -95,6 +105,26 @@ while [[ $# -gt 0 ]]; do
       ;;
     --frame-stride)
       FRAME_STRIDE="${2:-}"
+      shift 2
+      ;;
+    --max-frames)
+      MAX_FRAMES="${2:-}"
+      shift 2
+      ;;
+    --window-stride)
+      WINDOW_STRIDE="${2:-}"
+      shift 2
+      ;;
+    --window-topk-ratio)
+      WINDOW_TOPK_RATIO="${2:-}"
+      shift 2
+      ;;
+    --video-topk)
+      VIDEO_TOPK="${2:-}"
+      shift 2
+      ;;
+    --smoothing-kernel)
+      SMOOTHING_KERNEL="${2:-}"
       shift 2
       ;;
     --recursive)
@@ -151,6 +181,7 @@ import yaml
 
 config_path = Path(os.environ["CONFIG_PATH"])
 data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+visual_length = int(data.get("visual_length", 256))
 
 def emit(key, value):
     if value is None:
@@ -164,6 +195,11 @@ emit("CFG_OUTPUT", data.get("output", "outputs/results.json"))
 emit("CFG_DEVICE", data.get("device", "auto"))
 emit("CFG_THRESHOLD", data.get("threshold", 0.5))
 emit("CFG_FRAME_STRIDE", data.get("frame_stride", 16))
+emit("CFG_MAX_FRAMES", data.get("max_frames"))
+emit("CFG_WINDOW_STRIDE", data.get("window_stride", max(1, visual_length // 2)))
+emit("CFG_WINDOW_TOPK_RATIO", data.get("window_topk_ratio", 0.125))
+emit("CFG_VIDEO_TOPK", data.get("video_topk", 2))
+emit("CFG_SMOOTHING_KERNEL", data.get("smoothing_kernel", 5))
 emit("CFG_RECURSIVE", "1" if data.get("recursive", True) else "0")
 PY
 )"
@@ -175,6 +211,11 @@ OUTPUT="${OUTPUT:-${CFG_OUTPUT}}"
 DEVICE="${DEVICE:-${CFG_DEVICE}}"
 THRESHOLD="${THRESHOLD:-${CFG_THRESHOLD}}"
 FRAME_STRIDE="${FRAME_STRIDE:-${CFG_FRAME_STRIDE}}"
+MAX_FRAMES="${MAX_FRAMES:-${CFG_MAX_FRAMES}}"
+WINDOW_STRIDE="${WINDOW_STRIDE:-${CFG_WINDOW_STRIDE}}"
+WINDOW_TOPK_RATIO="${WINDOW_TOPK_RATIO:-${CFG_WINDOW_TOPK_RATIO}}"
+VIDEO_TOPK="${VIDEO_TOPK:-${CFG_VIDEO_TOPK}}"
+SMOOTHING_KERNEL="${SMOOTHING_KERNEL:-${CFG_SMOOTHING_KERNEL}}"
 RECURSIVE="${RECURSIVE:-${CFG_RECURSIVE}}"
 
 VIDEO_DIR_ABS="$(resolve_path "${VIDEO_DIR}")"
@@ -259,7 +300,15 @@ CMD=(
   --device "${DEVICE}"
   --threshold "${THRESHOLD}"
   --frame-stride "${FRAME_STRIDE}"
+  --window-stride "${WINDOW_STRIDE}"
+  --window-topk-ratio "${WINDOW_TOPK_RATIO}"
+  --video-topk "${VIDEO_TOPK}"
+  --smoothing-kernel "${SMOOTHING_KERNEL}"
 )
+
+if [[ -n "${MAX_FRAMES}" ]]; then
+  CMD+=(--max-frames "${MAX_FRAMES}")
+fi
 
 if [[ "${RECURSIVE}" == "1" ]]; then
   CMD+=(--recursive)

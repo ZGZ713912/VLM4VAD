@@ -1,9 +1,20 @@
 video_dir: data/videos
 anomaly_text: 打架
 model_checkpoint: checkpoints/model_xd.pth
+
+# Runtime
 device: auto
-threshold: 0.5
-frame_stride: 16
+threshold: 0.45
+frame_stride: 8
+max_frames: null
+
+# Temporal scoring
+window_stride: 128
+window_topk_ratio: 0.125
+video_topk: 2
+smoothing_kernel: 5
+
+# Checkpoint-bound architecture params
 visual_length: 256
 visual_width: 512
 embed_dim: 512

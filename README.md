@@ -23,10 +23,11 @@
 1. **视觉编码**：用 CLIP（ViT-B/16）对采样帧提取视觉特征。
 2. **文本引导**：把异常类别写成自然语言 prompt（中文/英文均可，内部会规范化）。
 3. **跨模态匹配**：在视觉特征与异常文本特征之间计算异常相关分数。
-4. **时序聚合**：按窗口切分长视频特征，对窗口内高分做 top-k 平均，得到视频级分数。
+4. **时序聚合**：对长视频使用重叠窗口、帧级平滑和 top-k 聚合，减少边界截断和单帧尖峰带来的波动。
 5. **阈值判定**：分数 ≥ `threshold` 判为 abnormal，否则 normal。
 
 默认配置见 `configs/inference.yaml`。
+调参说明见 `docs/guides/parameter_tuning.md`。
 
 ## 快速开始
 
@@ -156,9 +157,18 @@ VLM4VAD/
 | `anomaly_text` | 异常描述 | `打架` |
 | `model_checkpoint` | 权重路径 | `checkpoints/model_xd.pth` |
 | `device` | `auto` / `cpu` / `cuda` | `auto` |
-| `threshold` | 异常阈值 | `0.5` |
-| `frame_stride` | 抽帧步长 | `16` |
+| `threshold` | 异常阈值 | `0.45` |
+| `frame_stride` | 抽帧步长 | `8` |
+| `window_stride` | 滑动窗口步长 | `128` |
+| `window_topk_ratio` | 窗口内高分帧占比 | `0.125` |
+| `video_topk` | 视频级 top-k 窗口数 | `2` |
+| `smoothing_kernel` | 帧分数平滑核大小 | `5` |
+| `max_frames` | 单视频最多采样帧数 | `null` |
 | `output` | 结果 JSON | `outputs/results.json` |
+
+`visual_length`、`visual_width`、`embed_dim`、`visual_head`、`visual_layers`、`attn_window`、`prompt_prefix`、`prompt_postfix` 与 checkpoint 结构绑定，推理时通常不建议调整。
+
+更完整的参数解释、推荐范围和调参顺序见 `docs/guides/parameter_tuning.md`。
 
 也可以不走脚本，直接调用 Python：
 
@@ -189,7 +199,7 @@ PYTHONPATH=src python src/detect.py --config configs/inference.yaml
     "canonical_anomaly_text": "fighting",
     "abnormal": true,
     "score": 0.8123,
-    "threshold": 0.5,
+    "threshold": 0.45,
     "sampled_frames": 42,
     "window_scores": [0.71, 0.81],
     "frame_scores": [0.12, 0.55, 0.88]

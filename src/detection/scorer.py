@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import math
 from pathlib import Path
 from typing import List
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from clip import clip
 from features.clip_encoder import CLIPFrameEncoder
@@ -46,16 +48,44 @@ class VideoAnomalyDetector:
         prompt_postfix: int = 10,
         threshold: float = 0.5,
         frame_stride: int = 16,
+        max_frames: int | None = None,
+        window_stride: int | None = None,
+        smoothing_kernel: int = 5,
+        window_topk_ratio: float = 0.125,
+        video_topk: int = 2,
     ):
         if device in (None, "auto"):
             resolved_device = "cuda" if torch.cuda.is_available() else "cpu"
         else:
             resolved_device = device
 
+        if frame_stride < 1:
+            raise ValueError("frame_stride must be at least 1")
+        if max_frames is not None and max_frames < 1:
+            raise ValueError("max_frames must be at least 1 when provided")
+
+        resolved_window_stride = max(1, visual_length // 2) if window_stride is None else int(window_stride)
+        if resolved_window_stride < 1 or resolved_window_stride > visual_length:
+            raise ValueError("window_stride must be in [1, visual_length]")
+        if smoothing_kernel < 1:
+            raise ValueError("smoothing_kernel must be at least 1")
+        if smoothing_kernel % 2 == 0:
+            raise ValueError("smoothing_kernel must be an odd integer")
+        if not 0 < window_topk_ratio <= 1:
+            raise ValueError("window_topk_ratio must be in (0, 1]")
+        if video_topk < 1:
+            raise ValueError("video_topk must be at least 1")
+
         self.device = torch.device(resolved_device)
         self.threshold = threshold
         self.frame_stride = frame_stride
+        self.max_frames = max_frames
         self.visual_length = visual_length
+        self.window_stride = resolved_window_stride
+        self.smoothing_kernel = smoothing_kernel
+        self.window_topk_ratio = window_topk_ratio
+        self.window_topk_min = 2
+        self.video_topk = video_topk
 
         clip_model, preprocess = clip.load("ViT-B/16", self.device)
         self.model = CLIPVAD(
@@ -84,15 +114,37 @@ class VideoAnomalyDetector:
 
         self.encoder = CLIPFrameEncoder(self.model.clipmodel, self.model.clip_preprocess, self.device)
 
-    @staticmethod
-    def _topk_mean(values: torch.Tensor) -> float:
+    def _aggregate_window_score(self, values: torch.Tensor) -> float:
         flat = values.flatten()
         if flat.numel() == 0:
             return 0.0
-        k = min(flat.numel(), max(1, flat.numel() // 16 + 1))
+        k = min(flat.numel(), max(self.window_topk_min, math.ceil(flat.numel() * self.window_topk_ratio)))
         return float(torch.topk(flat, k=k).values.mean().item())
 
-    def _score_feature_windows(self, windows: np.ndarray, lengths: np.ndarray, anomaly_text: str) -> tuple[torch.Tensor, List[float], List[float]]:
+    def _smooth_frame_scores(self, frame_scores: torch.Tensor) -> torch.Tensor:
+        if self.smoothing_kernel <= 1 or frame_scores.numel() < 2:
+            return frame_scores
+
+        values = frame_scores.view(1, 1, -1)
+        padding = self.smoothing_kernel // 2
+        padded = F.pad(values, (padding, padding), mode="replicate")
+        return F.avg_pool1d(padded, kernel_size=self.smoothing_kernel, stride=1).view(-1)
+
+    def _aggregate_video_score(self, window_scores: List[float]) -> float:
+        if not window_scores:
+            return 0.0
+
+        values = torch.tensor(window_scores, dtype=torch.float32)
+        k = min(values.numel(), self.video_topk)
+        return float(torch.topk(values, k=k).values.mean().item())
+
+    def _score_feature_windows(
+        self,
+        windows: np.ndarray,
+        lengths: np.ndarray,
+        starts: np.ndarray,
+        anomaly_text: str,
+    ) -> tuple[torch.Tensor, List[float], List[float]]:
         prompt_pairs = build_prompt_pairs(anomaly_text)
         window_tensors = torch.tensor(windows, dtype=torch.float32, device=self.device)
         length_tensors = torch.tensor(lengths, dtype=torch.long, device=self.device)
@@ -107,22 +159,34 @@ class VideoAnomalyDetector:
 
         combined = torch.stack(prompt_scores, dim=0).mean(dim=0)
 
-        window_scores: List[float] = []
-        frame_scores: List[float] = []
-        for index, length in enumerate(lengths.tolist()):
+        total_frames = max(int(start + length) for start, length in zip(starts.tolist(), lengths.tolist()))
+        frame_score_sum = torch.zeros(total_frames, dtype=combined.dtype, device=self.device)
+        frame_score_count = torch.zeros(total_frames, dtype=combined.dtype, device=self.device)
+
+        for index, (start, length) in enumerate(zip(starts.tolist(), lengths.tolist())):
             active = combined[index, :length]
-            window_scores.append(self._topk_mean(active))
-            frame_scores.extend(active.detach().cpu().tolist())
+            frame_score_sum[start : start + length] += active
+            frame_score_count[start : start + length] += 1
+
+        frame_sequence = frame_score_sum / frame_score_count.clamp_min(1.0)
+        frame_sequence = self._smooth_frame_scores(frame_sequence)
+
+        window_scores: List[float] = []
+        for start, length in zip(starts.tolist(), lengths.tolist()):
+            active = frame_sequence[start : start + length]
+            window_scores.append(self._aggregate_window_score(active))
+
+        frame_scores = frame_sequence.detach().cpu().tolist()
 
         return combined, window_scores, frame_scores
 
     def predict_video(self, video_path: str | Path, anomaly_text: str) -> VideoDetectionResult:
-        frames = read_sampled_frames(video_path, frame_stride=self.frame_stride)
+        frames = read_sampled_frames(video_path, frame_stride=self.frame_stride, max_frames=self.max_frames)
         features = self.encoder.extract_features(frames)
-        windows, lengths = chunk_feature_sequence(features, self.visual_length)
-        _, window_scores, frame_scores = self._score_feature_windows(windows, lengths, anomaly_text)
+        windows, lengths, starts = chunk_feature_sequence(features, self.visual_length, self.window_stride)
+        _, window_scores, frame_scores = self._score_feature_windows(windows, lengths, starts, anomaly_text)
 
-        score = max(window_scores) if window_scores else 0.0
+        score = self._aggregate_video_score(window_scores)
         canonical = normalize_anomaly_text(anomaly_text)
         return VideoDetectionResult(
             video_path=str(video_path),

@@ -45,6 +45,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device")
     parser.add_argument("--threshold", type=float)
     parser.add_argument("--frame-stride", type=int)
+    parser.add_argument("--max-frames", type=int)
+    parser.add_argument("--window-stride", type=int)
+    parser.add_argument("--window-topk-ratio", type=float)
+    parser.add_argument("--video-topk", type=int)
+    parser.add_argument("--smoothing-kernel", type=int)
     parser.add_argument("--recursive", action="store_true")
     parser.add_argument("--no-recursive", action="store_false", dest="recursive")
     parser.add_argument("--output")
@@ -63,12 +68,18 @@ def main() -> None:
     if not video_dir or not anomaly_text or not checkpoint:
         raise SystemExit("--video-dir, --anomaly-text, and --checkpoint are required")
 
+    visual_length = config.get("visual_length", 256)
+    window_stride = args.window_stride if args.window_stride is not None else config.get("window_stride")
+    if window_stride is None:
+        window_stride = max(1, visual_length // 2)
+
     detector = VideoAnomalyDetector(
         checkpoint_path=_resolve_path(checkpoint, root),
         device=args.device or config.get("device"),
         threshold=args.threshold if args.threshold is not None else config.get("threshold", 0.5),
         frame_stride=args.frame_stride if args.frame_stride is not None else config.get("frame_stride", 16),
-        visual_length=config.get("visual_length", 256),
+        max_frames=args.max_frames if args.max_frames is not None else config.get("max_frames"),
+        visual_length=visual_length,
         visual_width=config.get("visual_width", 512),
         embed_dim=config.get("embed_dim", 512),
         visual_head=config.get("visual_head", 1),
@@ -76,6 +87,10 @@ def main() -> None:
         attn_window=config.get("attn_window", 64),
         prompt_prefix=config.get("prompt_prefix", 10),
         prompt_postfix=config.get("prompt_postfix", 10),
+        window_stride=window_stride,
+        smoothing_kernel=args.smoothing_kernel if args.smoothing_kernel is not None else config.get("smoothing_kernel", 5),
+        window_topk_ratio=args.window_topk_ratio if args.window_topk_ratio is not None else config.get("window_topk_ratio", 0.125),
+        video_topk=args.video_topk if args.video_topk is not None else config.get("video_topk", 2),
     )
 
     recursive = config.get("recursive", True) if args.recursive is None else args.recursive
