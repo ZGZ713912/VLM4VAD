@@ -1,12 +1,14 @@
 from math import sqrt
-from torch import FloatTensor
-from torch.nn.parameter import Parameter
-from torch.nn.modules.module import Module
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from scipy.spatial.distance import pdist, squareform
+from torch import FloatTensor
+from torch.nn.modules.module import Module
+from torch.nn.parameter import Parameter
+
 
 class GraphAttentionLayer(nn.Module):
     """

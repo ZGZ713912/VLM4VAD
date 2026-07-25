@@ -1,5 +1,6 @@
-import torch
 import numpy as np
+import torch
+
 
 def get_batch_label(texts, prompt_text, label_map: dict):
     label_vectors = torch.zeros(0)

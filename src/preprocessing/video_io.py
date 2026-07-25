@@ -6,7 +6,6 @@ from typing import List
 import cv2
 import numpy as np
 
-
 VIDEO_SUFFIXES = {
     ".avi",
     ".flv",

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import List
 
-
 NORMAL_PROMPT = "normal"
 
 _ANOMALY_ALIASES = {

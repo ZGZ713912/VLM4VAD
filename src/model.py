@@ -1,11 +1,12 @@
 from collections import OrderedDict
 
-import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
+
 from clip import clip
-from utils.layers import GraphConvolution, DistanceAdj
+from utils.layers import DistanceAdj, GraphConvolution
+
 
 class LayerNorm(nn.LayerNorm):
 
@@ -21,7 +22,7 @@ class QuickGELU(nn.Module):
 
 
 class ResidualAttentionBlock(nn.Module):
-    def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None):
+    def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor | None = None):
         super().__init__()
 
         self.attn = nn.MultiheadAttention(d_model, n_head)
@@ -35,7 +36,7 @@ class ResidualAttentionBlock(nn.Module):
         self.attn_mask = attn_mask
 
     def attention(self, x: torch.Tensor, padding_mask: torch.Tensor):
-        padding_mask = padding_mask.to(dtype=bool, device=x.device) if padding_mask is not None else None
+        padding_mask = padding_mask.to(dtype=torch.bool, device=x.device) if padding_mask is not None else None
         self.attn_mask = self.attn_mask.to(device=x.device) if self.attn_mask is not None else None
         return self.attn(x, x, x, need_weights=False, key_padding_mask=padding_mask, attn_mask=self.attn_mask)[0]
 
@@ -47,7 +48,7 @@ class ResidualAttentionBlock(nn.Module):
 
 
 class Transformer(nn.Module):
-    def __init__(self, width: int, layers: int, heads: int, attn_mask: torch.Tensor = None):
+    def __init__(self, width: int, layers: int, heads: int, attn_mask: torch.Tensor | None = None):
         super().__init__()
         self.width = width
         self.layers = layers
