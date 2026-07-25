@@ -33,7 +33,12 @@ set +e
 python - <<'PY'
 from pathlib import Path
 import sys
-import yaml
+
+try:
+    import yaml
+except ModuleNotFoundError:
+    print("WARN: missing package 'yaml' (PyYAML); run ./scripts/setup-vlm4vad --install", file=sys.stderr)
+    raise SystemExit(2)
 
 root = Path(".").resolve()
 config = yaml.safe_load((root / "configs/inference.yaml").read_text(encoding="utf-8")) or {}

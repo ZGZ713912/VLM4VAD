@@ -16,5 +16,6 @@ elif [[ -n "${ZSH_VERSION:-}" && -n "${(%):-%x}" ]]; then
 fi
 
 export VLM4VAD_PATH
+export VLM4VAD_CLIP_CACHE="${VLM4VAD_PATH}/.cache/clip"
 export PATH="${VLM4VAD_PATH}/scripts:${HOME}/.local/bin:${PATH}"
 export PYTHONPATH="${VLM4VAD_PATH}/src${PYTHONPATH:+:${PYTHONPATH}}"

@@ -27,6 +27,7 @@ vlm4vad_require_cmd() {
 vlm4vad_ensure_dirs() {
   local root="$1"
   mkdir -p \
+    "${root}/.cache/clip" \
     "${root}/data/videos" \
     "${root}/data/datasets" \
     "${root}/checkpoints" \

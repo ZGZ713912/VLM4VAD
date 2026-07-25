@@ -16,24 +16,24 @@ source "${SCRIPT_DIR}/_common.sh"
 ROOT="$(vlm4vad_repo_root)"
 CHECK_ONLY=0
 DO_INSTALL=0
-TORCH_VARIANT="${VLM4VAD_TORCH_VARIANT:-cpu}"
+TORCH_VARIANT="${VLM4VAD_TORCH_VARIANT:-auto}"
 TORCH_VERSION="${VLM4VAD_TORCH_VERSION:-2.4.1}"
 TORCHVISION_VERSION="${VLM4VAD_TORCHVISION_VERSION:-0.19.1}"
 
 usage() {
   cat <<'EOF'
-Usage: setup-vlm4vad [--install] [--check-only] [--torch-variant cpu|cu121]
+Usage: setup-vlm4vad [--install] [--check-only] [--torch-variant auto|cpu|cu121]
 
 Create project directories and verify Python dependencies for VLM4VAD.
 
 Options:
   --install                 Install torch/torchvision then requirements.txt
   --check-only              Only verify the environment, do not create directories
-  --torch-variant VARIANT   cpu (default) or cu121; or set VLM4VAD_TORCH_VARIANT
+  --torch-variant VARIANT   auto (default), cpu, or cu121; or set VLM4VAD_TORCH_VARIANT
   -h, --help                Show this help
 
 Environment:
-  VLM4VAD_TORCH_VARIANT           cpu | cu121
+  VLM4VAD_TORCH_VARIANT           auto | cpu | cu121
   VLM4VAD_TORCH_VERSION           default 2.4.1
   VLM4VAD_TORCHVISION_VERSION     default 0.19.1
 EOF
@@ -83,6 +83,18 @@ vlm4vad_require_cmd python
 
 install_torch() {
   local index_url=""
+  local resolved_variant="${TORCH_VARIANT}"
+
+  if [[ "${resolved_variant}" == "auto" ]]; then
+    if command -v nvidia-smi >/dev/null 2>&1; then
+      resolved_variant="cu121"
+    else
+      resolved_variant="cpu"
+    fi
+  fi
+
+  TORCH_VARIANT="${resolved_variant}"
+
   case "${TORCH_VARIANT}" in
     cpu)
       index_url="https://download.pytorch.org/whl/cpu"
@@ -91,7 +103,7 @@ install_torch() {
       index_url="https://download.pytorch.org/whl/cu121"
       ;;
     *)
-      vlm4vad_error "Unsupported torch variant: ${TORCH_VARIANT} (use cpu or cu121)"
+      vlm4vad_error "Unsupported torch variant: ${TORCH_VARIANT} (use auto, cpu, or cu121)"
       exit 1
       ;;
   esac
@@ -113,6 +125,7 @@ fi
 vlm4vad_info "Checking Python packages"
 if ! python - <<'PY'
 import importlib
+import shutil
 import sys
 
 required = [
@@ -142,6 +155,13 @@ if missing:
 
 import torch
 print(f"torch={torch.__version__} cuda={torch.cuda.is_available()}")
+
+if shutil.which("nvidia-smi") and not torch.cuda.is_available():
+    print(
+        "WARN: NVIDIA GPU is visible but current torch build has CUDA disabled. "
+        "Reinstall with: ./scripts/setup-vlm4vad --install --torch-variant cu121",
+        file=sys.stderr,
+    )
 PY
 then
   exit 1

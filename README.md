@@ -47,7 +47,7 @@ cp /path/to/model_xd.pth checkpoints/model_xd.pth
 # 首次：创建目录 + 安装 torch/torchvision + requirements.txt
 ./scripts/setup-vlm4vad --install
 
-# CUDA 12.1（可选）
+# 强制指定 CUDA 12.1（通常不需要；默认会在检测到 NVIDIA GPU 时自动选 CUDA）
 # ./scripts/setup-vlm4vad --install --torch-variant cu121
 
 # 日常：检查视频/权重/依赖是否就绪
@@ -57,8 +57,9 @@ cp /path/to/model_xd.pth checkpoints/model_xd.pth
 依赖说明：
 
 - 根目录 `requirements.txt`：通用运行依赖（**不含** `torch` / `torchvision`）
-- `torch` / `torchvision` 由脚本按 CPU 或 CUDA 源单独安装，避免与 devcontainer 重复、版本冲突
+- `torch` / `torchvision` 由脚本按 CPU 或 CUDA 源单独安装；默认会在检测到 NVIDIA GPU 时自动安装 CUDA 版，否则回退到 CPU 版
 - 未使用的包（如 `scikit-learn`）已从清单中移除
+- CLIP 首次运行会下载基础权重到仓库内 `.cache/clip/`，避免写入不可用的 home 目录缓存
 
 ### 3. 一键检测（视频 → 结果）
 
@@ -181,8 +182,8 @@ PYTHONPATH=src python src/detect.py --config configs/inference.yaml
 仓库已提供 `.devcontainer/`，用 VS Code Dev Containers / Codespaces 打开即可。
 
 - 默认 Python 3.11
-- 默认 `torch==2.4.1`、`torchvision==0.19.1`（CPU）；由 `postCreate` 调用 `setup-vlm4vad --install`
-- CUDA 12.1：把 `VLM4VAD_TORCH_VARIANT` 设为 `cu121`，并加 `--gpus=all`
+- 默认 `torch==2.4.1`、`torchvision==0.19.1`；由 `postCreate` 调用 `setup-vlm4vad --install`，检测到 NVIDIA GPU 时会自动选 `cu121`，否则安装 CPU 版
+- 若需要固定 CUDA 12.1：把 `VLM4VAD_TORCH_VARIANT` 设为 `cu121`，并加 `--gpus=all`
 - 容器创建后会安装依赖，并准备 `outputs/`、`data/videos/`、`checkpoints/`、`scripts/` PATH
 
 也可手动用 `.devcontainer/Dockerfile` 作为基础镜像。

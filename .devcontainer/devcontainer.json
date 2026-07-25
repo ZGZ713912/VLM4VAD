@@ -19,9 +19,10 @@
     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
     "PYTHONDONTWRITEBYTECODE": "1",
     "PYTHONUNBUFFERED": "1",
-    "VLM4VAD_TORCH_VARIANT": "cpu",
+    "VLM4VAD_TORCH_VARIANT": "auto",
     "VLM4VAD_TORCH_VERSION": "2.4.1",
-    "VLM4VAD_TORCHVISION_VERSION": "0.19.1"
+    "VLM4VAD_TORCHVISION_VERSION": "0.19.1",
+    "VLM4VAD_CLIP_CACHE": "${containerWorkspaceFolder}/.cache/clip"
   },
   "mounts": [
     "source=vlm4vad-pip-cache,target=/home/vscode/.cache/pip,type=volume",

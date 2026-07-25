@@ -1,5 +1,6 @@
 import hashlib
 import os
+from pathlib import Path
 import urllib
 import warnings
 from typing import Any, Union, List
@@ -39,6 +40,15 @@ _MODELS = {
     "ViT-L/14": "https://openaipublic.azureedge.net/clip/models/b8cca3fd41ae0c99ba7e8951adf17d267cdb84cd88be6f7c2e0eca1737a03836/ViT-L-14.pt",
     "ViT-L/14@336px": "https://openaipublic.azureedge.net/clip/models/3035c92b350959924f9f00213499208652fc7ea050643e8b385c2dac08641f02/ViT-L-14-336px.pt",
 }
+
+
+def _default_download_root() -> str:
+    env_root = os.environ.get("VLM4VAD_CLIP_CACHE")
+    if env_root:
+        return env_root
+
+    repo_root = Path(__file__).resolve().parents[2]
+    return str(repo_root / ".cache" / "clip")
 
 
 def _download(url: str, root: str):
@@ -107,7 +117,8 @@ def load(name: str, device: Union[str, torch.device] = "cuda" if torch.cuda.is_a
         Whether to load the optimized JIT model or more hackable non-JIT model (default).
 
     download_root: str
-        path to download the model files; by default, it uses "~/.cache/clip"
+        path to download the model files; by default, it uses VLM4VAD_CLIP_CACHE
+        or the repository-local .cache/clip directory
 
     Returns
     -------
@@ -118,7 +129,7 @@ def load(name: str, device: Union[str, torch.device] = "cuda" if torch.cuda.is_a
         A torchvision transform that converts a PIL image into a tensor that the returned model can take as its input
     """
     if name in _MODELS:
-        model_path = _download(_MODELS[name], download_root or os.path.expanduser("~/.cache/clip"))
+        model_path = _download(_MODELS[name], download_root or _default_download_root())
     elif os.path.isfile(name):
         model_path = name
     else:
