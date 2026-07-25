@@ -5,8 +5,9 @@
 - **项目**: 基于视觉语言模型的视频异常检测
 - **语言**: Python 3.10+
 - **框架**: PyTorch
-- **核心依赖**: transformers, opencv-python, torchvision, numpy, scikit-learn
-- **VLM 模型**: CLIP (OpenAI), BLIP (Salesforce)
+- **核心依赖**: torch, torchvision, opencv-python, numpy, scipy, Pillow, PyYAML, ftfy, regex, tqdm
+- **VLM 模型**: CLIP（仓库内 `src/clip`）；后续可扩展 BLIP 等
+- **依赖清单**: 根目录 `requirements.txt`（不含 torch；CPU/CUDA 由 `setup-vlm4vad --install` 单独安装）
 
 ## 目录结构约定
 
@@ -48,8 +49,10 @@ VLM4VAD/
 ## 常用命令
 
 ```bash
-# 安装依赖
-pip install -r requirements.txt
+# 安装依赖（先 torch/torchvision，再 requirements.txt）
+./scripts/setup-vlm4vad --install
+# CUDA 12.1 示例：
+# ./scripts/setup-vlm4vad --install --torch-variant cu121
 
 # 代码检查（如使用）
 ruff check src/

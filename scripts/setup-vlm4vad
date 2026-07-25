@@ -4,6 +4,7 @@
 # Usage:
 #   ./scripts/setup-vlm4vad
 #   ./scripts/setup-vlm4vad --install
+#   ./scripts/setup-vlm4vad --install --torch-variant cu121
 #   ./scripts/setup-vlm4vad --check-only
 
 set -euo pipefail
@@ -15,30 +16,50 @@ source "${SCRIPT_DIR}/_common.sh"
 ROOT="$(vlm4vad_repo_root)"
 CHECK_ONLY=0
 DO_INSTALL=0
+TORCH_VARIANT="${VLM4VAD_TORCH_VARIANT:-cpu}"
+TORCH_VERSION="${VLM4VAD_TORCH_VERSION:-2.4.1}"
+TORCHVISION_VERSION="${VLM4VAD_TORCHVISION_VERSION:-0.19.1}"
 
-for arg in "$@"; do
-  case "${arg}" in
-    --check-only)
-      CHECK_ONLY=1
-      ;;
-    --install)
-      DO_INSTALL=1
-      ;;
-    -h|--help)
-      cat <<'EOF'
-Usage: setup-vlm4vad [--install] [--check-only]
+usage() {
+  cat <<'EOF'
+Usage: setup-vlm4vad [--install] [--check-only] [--torch-variant cpu|cu121]
 
 Create project directories and verify Python dependencies for VLM4VAD.
 
 Options:
-  --install      pip install -r requirements.txt before checking
-  --check-only   Only verify the environment, do not create directories
-  -h, --help     Show this help
+  --install                 Install torch/torchvision then requirements.txt
+  --check-only              Only verify the environment, do not create directories
+  --torch-variant VARIANT   cpu (default) or cu121; or set VLM4VAD_TORCH_VARIANT
+  -h, --help                Show this help
+
+Environment:
+  VLM4VAD_TORCH_VARIANT           cpu | cu121
+  VLM4VAD_TORCH_VERSION           default 2.4.1
+  VLM4VAD_TORCHVISION_VERSION     default 0.19.1
 EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --check-only)
+      CHECK_ONLY=1
+      shift
+      ;;
+    --install)
+      DO_INSTALL=1
+      shift
+      ;;
+    --torch-variant)
+      TORCH_VARIANT="${2:-}"
+      shift 2
+      ;;
+    -h|--help)
+      usage
       exit 0
       ;;
     *)
-      vlm4vad_error "Unknown argument: ${arg}"
+      vlm4vad_error "Unknown argument: $1"
+      usage
       exit 1
       ;;
   esac
@@ -53,13 +74,39 @@ if [[ "${CHECK_ONLY}" -eq 0 ]]; then
     "${ROOT}/scripts/setup-vlm4vad" \
     "${ROOT}/scripts/detect-vlm4vad" \
     "${ROOT}/scripts/check-vlm4vad" \
+    "${ROOT}/scripts/install-path.sh" \
+    "${ROOT}/scripts/env_setup.sh" \
     2>/dev/null || true
 fi
 
 vlm4vad_require_cmd python
 
+install_torch() {
+  local index_url=""
+  case "${TORCH_VARIANT}" in
+    cpu)
+      index_url="https://download.pytorch.org/whl/cpu"
+      ;;
+    cu121)
+      index_url="https://download.pytorch.org/whl/cu121"
+      ;;
+    *)
+      vlm4vad_error "Unsupported torch variant: ${TORCH_VARIANT} (use cpu or cu121)"
+      exit 1
+      ;;
+  esac
+
+  vlm4vad_info "Installing torch==${TORCH_VERSION} torchvision==${TORCHVISION_VERSION} (${TORCH_VARIANT})"
+  python -m pip install --upgrade pip setuptools wheel
+  python -m pip install \
+    "torch==${TORCH_VERSION}" \
+    "torchvision==${TORCHVISION_VERSION}" \
+    --index-url "${index_url}"
+}
+
 if [[ "${DO_INSTALL}" -eq 1 ]]; then
-  vlm4vad_info "Installing requirements.txt"
+  install_torch
+  vlm4vad_info "Installing requirements.txt (no torch; already handled)"
   python -m pip install -r "${ROOT}/requirements.txt"
 fi
 
@@ -78,6 +125,7 @@ required = [
     "tqdm",
     "ftfy",
     "regex",
+    "scipy",
 ]
 
 missing = []

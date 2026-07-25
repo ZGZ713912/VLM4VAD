@@ -1,11 +1,9 @@
+# Runtime deps (torch/torchvision installed separately — see setup-vlm4vad / postCreate)
 numpy
 opencv-python
 Pillow
 PyYAML
-scikit-learn
 scipy
-torch
-torchvision
 tqdm
 ftfy
 regex
