@@ -17,7 +17,8 @@ ROOT="$(vlm4vad_repo_root)"
 cd "${ROOT}"
 
 vlm4vad_ensure_dirs "${ROOT}"
-vlm4vad_require_cmd python
+vlm4vad_require_python "${ROOT}"
+PYTHON_BIN="$(vlm4vad_python_bin "${ROOT}")"
 
 CONFIG="configs/inference.yaml"
 VIDEO_DIR=""
@@ -173,7 +174,7 @@ fi
 
 # Read defaults from config for preflight checks.
 eval "$(
-  CONFIG_PATH="${CONFIG_PATH}" python - <<'PY'
+  CONFIG_PATH="${CONFIG_PATH}" "${PYTHON_BIN}" - <<'PY'
 from pathlib import Path
 import os
 import shlex
@@ -256,7 +257,7 @@ else
   fi
 
   video_count="$(
-    VIDEO_DIR_ABS="${VIDEO_DIR_ABS}" RECURSIVE="${RECURSIVE}" python - <<'PY'
+    VIDEO_DIR_ABS="${VIDEO_DIR_ABS}" RECURSIVE="${RECURSIVE}" "${PYTHON_BIN}" - <<'PY'
 from pathlib import Path
 import os
 
@@ -291,7 +292,7 @@ vlm4vad_info "Output: ${OUTPUT_ABS}"
 vlm4vad_info "Running detection..."
 
 CMD=(
-  python src/detect.py
+  "${PYTHON_BIN}" src/detect.py
   --config "${CONFIG_PATH}"
   --video-dir "${VIDEO_DIR_ABS}"
   --anomaly-text "${ANOMALY_TEXT}"

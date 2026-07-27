@@ -13,12 +13,13 @@ source "${SCRIPT_DIR}/_common.sh"
 ROOT="$(vlm4vad_repo_root)"
 cd "${ROOT}"
 vlm4vad_ensure_dirs "${ROOT}"
+PYTHON_BIN="$(vlm4vad_python_bin "${ROOT}")"
 
 vlm4vad_info "Checking VLM4VAD layout and defaults"
 
 STATUS=0
 
-if ! command -v python >/dev/null 2>&1; then
+if [[ -z "${PYTHON_BIN}" ]]; then
   vlm4vad_error "python not found"
   exit 1
 fi
@@ -30,7 +31,7 @@ if [[ ! -f "${CONFIG}" ]]; then
 fi
 
 set +e
-python - <<'PY'
+"${PYTHON_BIN}" - <<'PY'
 from pathlib import Path
 import sys
 

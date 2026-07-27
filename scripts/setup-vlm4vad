@@ -19,6 +19,9 @@ DO_INSTALL=0
 TORCH_VARIANT="${VLM4VAD_TORCH_VARIANT:-auto}"
 TORCH_VERSION="${VLM4VAD_TORCH_VERSION:-2.4.1}"
 TORCHVISION_VERSION="${VLM4VAD_TORCHVISION_VERSION:-0.19.1}"
+HOST_PYTHON=""
+PYTHON_BIN=""
+VENV_DIR="${ROOT}/.venv"
 
 usage() {
   cat <<'EOF'
@@ -67,6 +70,9 @@ done
 
 cd "${ROOT}"
 
+HOST_PYTHON="$(vlm4vad_python_bin "${ROOT}")"
+PYTHON_BIN="${HOST_PYTHON}"
+
 if [[ "${CHECK_ONLY}" -eq 0 ]]; then
   vlm4vad_info "Creating project directories under ${ROOT}"
   vlm4vad_ensure_dirs "${ROOT}"
@@ -79,7 +85,16 @@ if [[ "${CHECK_ONLY}" -eq 0 ]]; then
     2>/dev/null || true
 fi
 
-vlm4vad_require_cmd python
+vlm4vad_require_python "${ROOT}"
+
+ensure_venv() {
+  if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
+    vlm4vad_info "Creating virtualenv at ${VENV_DIR}"
+    "${HOST_PYTHON}" -m venv "${VENV_DIR}"
+  fi
+
+  PYTHON_BIN="${VENV_DIR}/bin/python"
+}
 
 install_torch() {
   local index_url=""
@@ -109,21 +124,22 @@ install_torch() {
   esac
 
   vlm4vad_info "Installing torch==${TORCH_VERSION} torchvision==${TORCHVISION_VERSION} (${TORCH_VARIANT})"
-  python -m pip install --upgrade pip setuptools wheel
-  python -m pip install \
+  "${PYTHON_BIN}" -m pip install --upgrade pip setuptools wheel
+  "${PYTHON_BIN}" -m pip install \
     "torch==${TORCH_VERSION}" \
     "torchvision==${TORCHVISION_VERSION}" \
     --index-url "${index_url}"
 }
 
 if [[ "${DO_INSTALL}" -eq 1 ]]; then
+  ensure_venv
   install_torch
   vlm4vad_info "Installing requirements.txt (no torch; already handled)"
-  python -m pip install -r "${ROOT}/requirements.txt"
+  "${PYTHON_BIN}" -m pip install -r "${ROOT}/requirements.txt"
 fi
 
 vlm4vad_info "Checking Python packages"
-if ! python - <<'PY'
+if ! "${PYTHON_BIN}" - <<'PY'
 import importlib
 import shutil
 import sys

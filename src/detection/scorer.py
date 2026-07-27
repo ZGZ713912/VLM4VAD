@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 import math
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import List
 
 import numpy as np
 import torch
@@ -26,8 +25,8 @@ class VideoDetectionResult:
     score: float
     threshold: float
     sampled_frames: int
-    window_scores: List[float]
-    frame_scores: List[float]
+    window_scores: list[float]
+    frame_scores: list[float]
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -54,6 +53,7 @@ class VideoAnomalyDetector:
         window_topk_ratio: float = 0.125,
         video_topk: int = 2,
     ):
+        resolved_device: str | torch.device
         if device in (None, "auto"):
             resolved_device = "cuda" if torch.cuda.is_available() else "cpu"
         else:
@@ -130,7 +130,7 @@ class VideoAnomalyDetector:
         padded = F.pad(values, (padding, padding), mode="replicate")
         return F.avg_pool1d(padded, kernel_size=self.smoothing_kernel, stride=1).view(-1)
 
-    def _aggregate_video_score(self, window_scores: List[float]) -> float:
+    def _aggregate_video_score(self, window_scores: list[float]) -> float:
         if not window_scores:
             return 0.0
 
@@ -144,7 +144,7 @@ class VideoAnomalyDetector:
         lengths: np.ndarray,
         starts: np.ndarray,
         anomaly_text: str,
-    ) -> tuple[torch.Tensor, List[float], List[float]]:
+    ) -> tuple[torch.Tensor, list[float], list[float]]:
         prompt_pairs = build_prompt_pairs(anomaly_text)
         window_tensors = torch.tensor(windows, dtype=torch.float32, device=self.device)
         length_tensors = torch.tensor(lengths, dtype=torch.long, device=self.device)
@@ -171,7 +171,7 @@ class VideoAnomalyDetector:
         frame_sequence = frame_score_sum / frame_score_count.clamp_min(1.0)
         frame_sequence = self._smooth_frame_scores(frame_sequence)
 
-        window_scores: List[float] = []
+        window_scores: list[float] = []
         for start, length in zip(starts.tolist(), lengths.tolist()):
             active = frame_sequence[start : start + length]
             window_scores.append(self._aggregate_window_score(active))
@@ -200,7 +200,7 @@ class VideoAnomalyDetector:
             frame_scores=frame_scores,
         )
 
-    def predict_folder(self, video_dir: str | Path, anomaly_text: str, recursive: bool = True) -> List[VideoDetectionResult]:
+    def predict_folder(self, video_dir: str | Path, anomaly_text: str, recursive: bool = True) -> list[VideoDetectionResult]:
         video_files = iter_video_files(video_dir, recursive=recursive)
         if not video_files:
             raise ValueError(f"No video files found in {video_dir}")
