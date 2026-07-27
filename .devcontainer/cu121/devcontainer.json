@@ -1,0 +1,46 @@
+{
+  "name": "VLM4VAD (CUDA 12.1)",
+  "image": "ghcr.io/zgz713912/vlm4vad-devcontainer:cu121",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "remoteUser": "vscode",
+  "remoteEnv": {
+    "PATH": "${containerWorkspaceFolder}/scripts:/home/vscode/.local/bin:${containerEnv:PATH}",
+    "PYTHONPATH": "${containerWorkspaceFolder}/src",
+    "VLM4VAD_PATH": "${containerWorkspaceFolder}"
+  },
+  "runArgs": [
+    "--ipc=host",
+    "--shm-size=16g"
+  ],
+  "containerEnv": {
+    "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONUNBUFFERED": "1",
+    "VLM4VAD_TORCH_VARIANT": "cu121",
+    "VLM4VAD_TORCH_VERSION": "2.4.1",
+    "VLM4VAD_TORCHVISION_VERSION": "0.19.1",
+    "VLM4VAD_CLIP_CACHE": "${containerWorkspaceFolder}/.cache/clip"
+  },
+  "mounts": [
+    "source=vlm4vad-clip-cache,target=/home/vscode/.cache/clip,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "eamodio.gitlens",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.analysis.extraPaths": [
+          "${containerWorkspaceFolder}/src"
+        ],
+        "terminal.integrated.defaultProfile.linux": "zsh"
+      }
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/postCreate.sh",
+  "postStartCommand": "mkdir -p .cache/clip outputs data/videos data/datasets checkpoints experiments"
+}

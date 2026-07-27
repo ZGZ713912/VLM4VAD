@@ -1,9 +1,6 @@
 {
-  "name": "VLM4VAD",
-  "build": {
-    "context": "..",
-    "dockerfile": "Dockerfile"
-  },
+  "name": "VLM4VAD (CPU)",
+  "image": "ghcr.io/zgz713912/vlm4vad-devcontainer:cpu",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "remoteUser": "vscode",
   "remoteEnv": {
@@ -19,13 +16,12 @@
     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
     "PYTHONDONTWRITEBYTECODE": "1",
     "PYTHONUNBUFFERED": "1",
-    "VLM4VAD_TORCH_VARIANT": "auto",
+    "VLM4VAD_TORCH_VARIANT": "cpu",
     "VLM4VAD_TORCH_VERSION": "2.4.1",
     "VLM4VAD_TORCHVISION_VERSION": "0.19.1",
     "VLM4VAD_CLIP_CACHE": "${containerWorkspaceFolder}/.cache/clip"
   },
   "mounts": [
-    "source=vlm4vad-pip-cache,target=/home/vscode/.cache/pip,type=volume",
     "source=vlm4vad-clip-cache,target=/home/vscode/.cache/clip,type=volume"
   ],
   "customizations": {
@@ -46,5 +42,5 @@
     }
   },
   "postCreateCommand": "bash .devcontainer/postCreate.sh",
-  "postStartCommand": "bash scripts/install-path.sh && mkdir -p outputs data/videos data/datasets checkpoints experiments"
+  "postStartCommand": "mkdir -p .cache/clip outputs data/videos data/datasets checkpoints experiments"
 }
